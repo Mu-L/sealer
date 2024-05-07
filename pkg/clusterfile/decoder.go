@@ -135,7 +135,7 @@ func decodeClusterFile(reader io.Reader, clusterfile *ClusterFile) error {
 				}
 			}
 
-			clusterfile.apps = &app
+			clusterfile.app = &app
 		case kubeadmConstants.InitConfigurationKind:
 			var in v1beta3.InitConfiguration
 
@@ -288,10 +288,14 @@ func checkAndFillCluster(cluster *v2.Cluster) error {
 		cluster.Spec.Env = append(cluster.Spec.Env, fmt.Sprintf("%s=%s", common.EnvContainerRuntime, cluster.Spec.ContainerRuntime.Type))
 	}
 
+	if cluster.Spec.DataRoot == "" {
+		cluster.Spec.DataRoot = common.DefaultSealerDataDir
+	}
+
 	return nil
 }
 
-//parseLaunchCmds parse shell, kube,helm type launch cmds
+// parseLaunchCmds parse shell, kube,helm type launch cmds
 // kubectl apply -n sealer-io -f ns.yaml -f app.yaml
 // helm install my-nginx bitnami/nginx
 // key1=value1 key2=value2 && bash install1.sh && bash install2.sh

@@ -25,11 +25,10 @@ import (
 
 	"github.com/containers/common/libimage"
 	"github.com/go-errors/errors"
-	"github.com/sirupsen/logrus"
-
 	"github.com/sealerio/sealer/common"
 	"github.com/sealerio/sealer/pkg/define/options"
 	"github.com/sealerio/sealer/utils/archive"
+	"github.com/sirupsen/logrus"
 )
 
 var LoadError = errors.Errorf("failed to load new image")
@@ -127,21 +126,9 @@ func (engine *Engine) Load(opts *options.LoadOptions) error {
 		return fmt.Errorf("failed to create new manifest %s :%v ", manifestName, err)
 	}
 
-	defer func() {
-		if errors.Is(err, LoadError) {
-			err = engine.DeleteManifests([]string{manifestName}, &options.ManifestDeleteOpts{})
-			if err != nil {
-				logrus.Errorf("failed to delete manifest %s :%v ", manifestName, err)
-			}
-		}
-	}()
-
-	for _, imageID := range instancesIDs {
-		err = engine.AddToManifest(manifestName, imageID, &options.ManifestAddOpts{})
-		if err != nil {
-			logrus.Errorf("failed to add new image %s to %s :%v ", imageID, manifestName, err)
-			return LoadError
-		}
+	err = engine.AddToManifest(manifestName, instancesIDs, &options.ManifestAddOpts{})
+	if err != nil {
+		return fmt.Errorf("failed to add new image to %s :%v ", manifestName, err)
 	}
 
 	return nil

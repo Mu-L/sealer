@@ -16,7 +16,9 @@ package application
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -24,6 +26,7 @@ import (
 	"github.com/sealerio/sealer/pkg/env"
 	v2 "github.com/sealerio/sealer/types/api/v2"
 	osUtils "github.com/sealerio/sealer/utils/os"
+	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 )
 
@@ -46,6 +49,7 @@ type overWriteProcessor struct {
 func (r overWriteProcessor) Process(appRoot string) error {
 	target := filepath.Join(appRoot, r.Path)
 
+	logrus.Debugf("will do overwrite processor on the file : %s", target)
 	err := osUtils.NewCommonWriter(target).WriteFile([]byte(r.Data))
 	if err != nil {
 		return fmt.Errorf("failed to write to file %s with raw mode: %v", target, err)
@@ -54,8 +58,8 @@ func (r overWriteProcessor) Process(appRoot string) error {
 }
 
 // mergeProcessor :this will merge the FilePath with the Values.
-//Only files in yaml format are supported.
-//if Strategy is "merge" will deeply merge each yaml file section.
+// Only files in yaml format are supported.
+// if Strategy is "merge" will deeply merge each yaml file section.
 type mergeProcessor struct {
 	v2.AppFile
 }
@@ -72,15 +76,21 @@ func (m mergeProcessor) Process(appRoot string) error {
 	}
 
 	target := filepath.Join(appRoot, m.Path)
-	contents, err := os.ReadFile(filepath.Clean(target))
+
+	logrus.Debugf("will do merge processor on the file : %s", target)
+
+	f, err := os.Open(filepath.Clean(target))
 	if err != nil {
 		return err
 	}
 
-	for _, section := range bytes.Split(contents, []byte("---\n")) {
+	dec := yaml.NewDecoder(f)
+	for {
 		destDataMap := make(map[string]interface{})
-
-		err = yaml.Unmarshal(section, &destDataMap)
+		err = dec.Decode(destDataMap)
+		if errors.Is(err, io.EOF) {
+			break
+		}
 		if err != nil {
 			return fmt.Errorf("failed to unmarshal config data: %v", err)
 		}
@@ -98,14 +108,14 @@ func (m mergeProcessor) Process(appRoot string) error {
 		result = append(result, out)
 	}
 
-	err = osUtils.NewCommonWriter(target).WriteFile(bytes.Join(result, []byte("---\n")))
+	err = osUtils.NewCommonWriter(target).WriteFile(bytes.Join(result, []byte("\n---\n")))
 	if err != nil {
 		return fmt.Errorf("failed to write to file %s with raw mode: %v", target, err)
 	}
 	return nil
 }
 
-//envRender :this will render the FilePath with the Values.
+// envRender :this will render the FilePath with the Values.
 type envRender struct {
 	envData map[string]string
 }
@@ -114,6 +124,8 @@ func (e envRender) Process(appRoot string) error {
 	if len(e.envData) == 0 {
 		return nil
 	}
+
+	logrus.Debugf("will render the dir : %s with the values: %+v\n", appRoot, e.envData)
 
 	return env.RenderTemplate(appRoot, e.envData)
 }

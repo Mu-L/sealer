@@ -94,12 +94,12 @@ func NewInfraDriver(cluster *v2.Cluster) (InfraDriver, error) {
 	}
 
 	// initialize sshConfigs field
-	for _, host := range cluster.Spec.Hosts {
-		if err = mergo.Merge(&host.SSH, &cluster.Spec.SSH); err != nil {
+	for i := range cluster.Spec.Hosts {
+		if err = mergo.Merge(&cluster.Spec.Hosts[i].SSH, &cluster.Spec.SSH); err != nil {
 			return nil, err
 		}
-		for _, ip := range host.IPS {
-			ret.sshConfigs[ip.String()] = ssh.NewSSHClient(&host.SSH, true)
+		for _, ip := range cluster.Spec.Hosts[i].IPS {
+			ret.sshConfigs[ip.String()] = ssh.NewSSHClient(&cluster.Spec.Hosts[i].SSH, true)
 		}
 	}
 
@@ -306,7 +306,7 @@ func (d *SSHInfraDriver) GetClusterLaunchApps() []string {
 }
 
 func (d *SSHInfraDriver) GetHostName(hostIP net.IP) (string, error) {
-	hostName, err := d.CmdToString(hostIP, nil, "hostname", "")
+	hostName, err := d.CmdToString(hostIP, nil, "uname -n", "")
 	if err != nil {
 		return "", err
 	}
@@ -338,11 +338,21 @@ func (d *SSHInfraDriver) GetHostsPlatform(hosts []net.IP) (map[v1.Platform][]net
 }
 
 func (d *SSHInfraDriver) GetClusterRootfsPath() string {
-	return filepath.Join(common.DefaultSealerDataDir, d.cluster.Name, "rootfs")
+	dataRoot := d.cluster.Spec.DataRoot
+	if dataRoot == "" {
+		dataRoot = common.DefaultSealerDataDir
+	}
+
+	return filepath.Join(dataRoot, d.cluster.Name, "rootfs")
 }
 
 func (d *SSHInfraDriver) GetClusterBasePath() string {
-	return filepath.Join(common.DefaultSealerDataDir, d.cluster.Name)
+	dataRoot := d.cluster.Spec.DataRoot
+	if dataRoot == "" {
+		dataRoot = common.DefaultSealerDataDir
+	}
+
+	return filepath.Join(dataRoot, d.cluster.Name)
 }
 
 func (d *SSHInfraDriver) Execute(hosts []net.IP, f func(host net.IP) error) error {
